@@ -7,4 +7,4 @@
 - รีสตาร์ท VSCode, เปิด Terminal ขึ้นมา ให้ใช้ Flutter run (อย่าลืมเปลี่ยน Directory ก่อน Run)
 
 ## ปัญหา
-- หน้าARยังไม่เเสดง![image](https://github.com/Megamaster0412/ku7/assets/166796037/aeee0c2b-bb9d-4664-99ed-a661daaf35a5)
+- หน้าARยังไม่เเสดง (null check operator used on a null value)
