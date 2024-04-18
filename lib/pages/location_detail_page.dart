@@ -14,7 +14,7 @@ class LocationDetails extends StatelessWidget {
       appBar: AppBar(
         title: Text('Location Details'),
       ),
-      body: SingleChildScrollView( // Wrap the Column with SingleChildScrollView
+      body: SingleChildScrollView(
         child: Padding(
           padding: EdgeInsets.all(16.0),
           child: Column(
@@ -48,7 +48,7 @@ class LocationDetails extends StatelessWidget {
                   fontSize: 18,
                 ),
               ),
-              SizedBox(height: 20), // Add spacing between the details and the button
+              SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () {
                   Navigator.push(
@@ -63,15 +63,15 @@ class LocationDetails extends StatelessWidget {
                 },
                 child: Text('Set Location'),
               ),
-              SizedBox(height: 10), // Add some spacing between the buttons
+              SizedBox(height: 10),
               ElevatedButton(
                 onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => ArPage(
-                        destinationLatitude: location.latitude,
-                        destinationLongitude: location.longitude,
+                      builder: (context) => ARPage(
+                        latitude: location.latitude, // Pass the latitude from the location
+                        longitude: location.longitude, // Pass the longitude from the location
                       ),
                     ),
                   );

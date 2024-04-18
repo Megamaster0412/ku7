@@ -1,29 +1,87 @@
 import 'package:flutter/material.dart';
-import 'package:arcore_flutter_plugin/arcore_flutter_plugin.dart';
-import 'package:vector_math/vector_math_64.dart' as vector;
+import 'package:geolocator/geolocator.dart';
+import 'package:vector_math/vector_math_64.dart' show radians;
 import 'dart:math' as math;
 
-class ArPage extends StatefulWidget {
-  final double destinationLatitude;
-  final double destinationLongitude;
-
-  ArPage({
-    Key? key,
-    required this.destinationLatitude,
-    required this.destinationLongitude,
-  }) : super(key: key);
-
-  @override
-  _ArPageState createState() => _ArPageState();
+// Dummy AR classes
+class ARSessionManager {
+  void dispose() {}
+  void onInitialize({
+    required bool showFeaturePoints,
+    required bool showPlanes,
+    String? customPlaneTexturePath,
+    required bool handlePans,
+    required bool handleRotation,
+  }) {}
+  void addNode({required ARNode node}) {}
 }
 
-class _ArPageState extends State<ArPage> {
-  ArCoreController? arCoreController;
-  double bearingToDestination = 0.0;
+class ARNode {
+  final String type;
+  final String uri;
+  final ARVector3 position;
+  final ARVector3 scale;
+  final ARVector4 rotation;
+
+  ARNode({
+    required this.type,
+    required this.uri,
+    required this.position,
+    required this.scale,
+    required this.rotation,
+  });
+}
+
+class ARVector3 {
+  final double x, y, z;
+
+  ARVector3({required this.x, required this.y, required this.z});
+  static ARVector3 uniform(double scale) => ARVector3(x: scale, y: scale, z: scale);
+}
+
+class ARVector4 {
+  final double x, y, z, w;
+
+  ARVector4({required this.x, required this.y, required this.z, required this.w});
+}
+
+// ARPage Widget
+class ARPage extends StatefulWidget {
+  final double latitude;
+  final double longitude;
+
+  ARPage({Key? key, required this.latitude, required this.longitude}) : super(key: key);
+
+  @override
+  _ARPageState createState() => _ARPageState();
+}
+
+class _ARPageState extends State<ARPage> {
+  ARSessionManager? arSessionManager;
+  Position? currentPosition;
+  double? targetBearing;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize currentPosition with the widget's latitude and longitude
+    currentPosition = Position(
+      latitude: widget.latitude,
+      longitude: widget.longitude,
+      timestamp: DateTime.now(),
+      accuracy: 0,
+      altitude: 0,
+      heading: 0,
+      speed: 0,
+      speedAccuracy: 0,
+    );
+    // Setup the AR session or any other initial state here
+    _setDestination();
+  }
 
   @override
   void dispose() {
-    arCoreController?.dispose();
+    arSessionManager?.dispose();
     super.dispose();
   }
 
@@ -31,84 +89,76 @@ class _ArPageState extends State<ArPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('AR Compass'),
+        title: Text("AR Compass"),
       ),
-      body: ArCoreView(
-        onArCoreViewCreated: _onArCoreViewCreated,
-        enableTapRecognizer: true, // if you want to add onTap functionality
+      body: Container(
+        child: Center(
+          child: ElevatedButton(
+            onPressed: _setDestination,
+            child: Text('Set Destination'),
+            style: ElevatedButton.styleFrom(
+              foregroundColor: Colors.white, backgroundColor: Colors.blue,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+            ),
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _setDestination,
+        tooltip: 'Set Destination',
+        child: Icon(Icons.location_searching),
       ),
     );
   }
 
-  void _onArCoreViewCreated(ArCoreController controller) {
-    arCoreController = controller;
-    _startCompass();
-  }
-
-  void _startCompass() {
-    // Start updating compass direction
-    _updateCompassDirection();
-  }
-
-  void _updateCompassDirection() {
-    // Calculate the bearing to the destination
-    bearingToDestination = _calculateBearingToDestination(
-      widget.destinationLatitude,
-      widget.destinationLongitude,
+  void onARViewCreated(ARSessionManager arSessionManager) {
+    this.arSessionManager = arSessionManager;
+    // Initialize AR session with your desired parameters
+    arSessionManager.onInitialize(
+      showFeaturePoints: false,
+      showPlanes: true,
+      customPlaneTexturePath: "assets/ar/Arrow5.obj",
+      handlePans: false,
+      handleRotation: false,
     );
-
-    // Update the node with new bearing
-    _updateArrowNodeWithBearing(bearingToDestination);
-
-    // Update the compass direction periodically
-    Future.delayed(Duration(seconds: 1), _updateCompassDirection);
   }
 
-  void _updateArrowNodeWithBearing(double bearing) {
-    arCoreController?.removeNode(nodeName: 'arrow');
-    arCoreController?.addArCoreNode(_createArrowNode(bearing));
+  void _setDestination() {
+    if (currentPosition == null) {
+      print('Current position is null, cannot set destination.');
+      return;
+    }
+    setState(() {
+      // Assuming you want to set the bearing to a fixed destination (for example, New York City's coordinates)
+      double destinationLatitude = 40.7128; // Example destination latitude
+      double destinationLongitude = -74.0060; // Example destination longitude
+      targetBearing = calculateBearing(
+        currentPosition!.latitude,
+        currentPosition!.longitude,
+        destinationLatitude,
+        destinationLongitude,
+      );
+      arSessionManager!.addNode(
+        node: ARNode(
+          type: "webGLBModelNode",
+          uri: "Assets/ar/Arrow5.obj",
+          position: ARVector3(x: 0, y: 0, z: -1),
+          scale: ARVector3.uniform(0.5),
+          rotation: ARVector4(x: 0, y: 1, z: 0, w: radians(targetBearing!)),
+        ),
+      );
+    });
   }
 
-  ArCoreNode _createArrowNode(double bearing) {
-    final vector.Quaternion quaternionRotation = vector.Quaternion.axisAngle(
-        vector.Vector3(0, 1, 0),
-        vector.radians(bearing)
-    );
+  double calculateBearing(double startLat, double startLng, double endLat, double endLng) {
+    var startRad = radians(startLat);
+    var endRad = radians(endLat);
+    var dLon = radians(endLng - startLng);
 
-    // Convert Quaternion to Vector4 for the rotation.
-    final vector.Vector4 rotationVector = vector.Vector4(
-        quaternionRotation.x,
-        quaternionRotation.y,
-        quaternionRotation.z,
-        quaternionRotation.w
-    );
+    var y = math.sin(dLon) * math.cos(endRad);
+    var x = math.cos(startRad) * math.sin(endRad) - math.sin(startRad) * math.cos(endRad) * math.cos(dLon);
+    var brng = math.atan2(y, x);
 
-    final arrowNode = ArCoreReferenceNode(
-      name: 'arrow',
-      object3DFileName: 'assets/ar/Arrow5.obj',
-      position: vector.Vector3(0, -1, -2),
-      rotation: rotationVector, // Assign the converted Vector4 rotation.
-    );
-
-    return arrowNode;
-  }
-
-
-  double _calculateBearingToDestination(double destLat, double destLon) {
-    // This method calculates the bearing from current location to the destination.
-    // It uses the haversine formula to calculate the initial bearing.
-    double lat1 = vector.radians(widget.destinationLatitude);
-    double lon1 = vector.radians(widget.destinationLongitude);
-    double lat2 = vector.radians(destLat);
-    double lon2 = vector.radians(destLon);
-
-    double y = math.sin(lon2 - lon1) * math.cos(lat2);
-    double x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(lon2 - lon1);
-    double bearing = vector.degrees(math.atan2(y, x));
-
-    // Normalize the bearing to be in the range [0, 360)
-    bearing = (bearing + 360) % 360;
-
-    return bearing;
+    return brng;  // Return bearing in radians
   }
 }
